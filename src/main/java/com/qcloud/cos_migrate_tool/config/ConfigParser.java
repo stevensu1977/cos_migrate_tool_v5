@@ -25,6 +25,7 @@ public class ConfigParser {
     private static final String MIGRATE_TYPE = "type";
 
     private static final String COMMON_SECTION_NAME = "common";
+    private static final String COMMON_CLOUDVENDOR = "cloudVendor";
     private static final String COMMON_REGION = "region";
     private static final String COMMON_ENDPOINT_SUFFIX = "endPointSuffix";
     private static final String COMMON_BUCKETNAME = "bucketName";
@@ -266,6 +267,12 @@ public class ConfigParser {
     }
 
     private boolean checkCommonConfig(Preferences prefs) {
+
+        
+        if (!isKeyExist(prefs, COMMON_SECTION_NAME, COMMON_CLOUDVENDOR)) {
+            return false;
+        }
+
         if (!isKeyExist(prefs, COMMON_SECTION_NAME, COMMON_REGION)) {
             return false;
         }
@@ -373,6 +380,12 @@ public class ConfigParser {
     private boolean initCommonConfig(Preferences prefs, CommonConfig commonConfig) {
 
         try {
+
+            String cloudVendor = getConfigValue(prefs, COMMON_SECTION_NAME, COMMON_CLOUDVENDOR);
+            assert (cloudVendor != null);
+            commonConfig.setCloudVender(cloudVendor);
+
+
             String region = getConfigValue(prefs, COMMON_SECTION_NAME, COMMON_REGION);
             assert (region != null);
             commonConfig.setRegion(region);
@@ -473,6 +486,7 @@ public class ConfigParser {
                 commonConfig.setTaskExecutorNumberStr(taskExecutorNumberStr);
             }
 
+            System.out.println(commonConfig.getCloudVendorWithRegion());
 
         } catch (Exception e) {
             System.err.println(e.getMessage());

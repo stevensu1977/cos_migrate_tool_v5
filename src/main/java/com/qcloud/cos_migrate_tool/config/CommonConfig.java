@@ -33,19 +33,20 @@ public class CommonConfig {
     private String cosProxyHost = "";
     private int cosProxyPort = -1;
     private String encryptionType = "";
+    private String cloudVendor = "";
 
     public void setEncryptionType(String encryptionType) {
         if (!encryptionType.equals("sse-cos")) {
             throw new IllegalArgumentException("Not support encryptionType:" + encryptionType);
         }
-        
+
         this.encryptionType = encryptionType.trim();
     }
-    
+
     public String getEncryptionType() {
         return encryptionType;
     }
-    
+
     public String getTempFolderPath() {
         return tempFolderPath;
     }
@@ -65,6 +66,27 @@ public class CommonConfig {
         this.tempFolderPath = SystemUtils.formatLocalPath(this.tempFolderPath);
     }
 
+    
+    public String getCloudVendor() {
+        return cloudVendor;
+    }
+
+    public void setCloudVender(String cloudVendor){
+        
+        cloudVendor=cloudVendor.trim();
+        if (!cloudVendor.equalsIgnoreCase("AWS")&&!cloudVendor.equalsIgnoreCase("TENCENT")) {
+            throw new IllegalArgumentException("this tools only support AWS S3 or Tencent COS!");
+        }
+
+         this.cloudVendor=cloudVendor;
+
+    }
+
+    public String getCloudVendorWithRegion(){
+        return this.cloudVendor.toUpperCase()+" , Region: "+this.getRegion(); 
+    }
+
+
     public String getBucketName() {
         return bucketName;
     }
@@ -73,8 +95,7 @@ public class CommonConfig {
         bucketName = bucketName.trim();
         String parrtern = ".*-(125|100|20)[0-9]{3,}$";
         if (!Pattern.matches(parrtern, bucketName)) {
-            throw new IllegalArgumentException(
-                    "bucketName must contain appid. example: test-1250001000");
+            throw new IllegalArgumentException("bucketName must contain appid. example: test-1250001000");
         }
         this.bucketName = bucketName;
     }
@@ -89,7 +110,7 @@ public class CommonConfig {
         }
         this.region = region.trim();
     }
-    
+
     public String getEndpointSuffix() {
         return endpointSuffix;
     }
@@ -147,8 +168,7 @@ public class CommonConfig {
         }
     }
 
-    public void setTaskExecutorNumberStr(String taskExecutorNumberStr)
-            throws IllegalArgumentException {
+    public void setTaskExecutorNumberStr(String taskExecutorNumberStr) throws IllegalArgumentException {
         taskExecutorNumberStr = taskExecutorNumberStr.trim();
         try {
             int number = Integer.valueOf(taskExecutorNumberStr);
@@ -177,13 +197,11 @@ public class CommonConfig {
         }
     }
 
-
     public int getSmallFileExecutorNumber() {
         return smallFileExecutorNumber;
     }
 
-    public void setSmallFileUploadExecutorNum(String smallFileExecutorNumStr)
-            throws IllegalArgumentException {
+    public void setSmallFileUploadExecutorNum(String smallFileExecutorNumStr) throws IllegalArgumentException {
         smallFileExecutorNumStr = smallFileExecutorNumStr.trim();
         try {
             int number = Integer.valueOf(smallFileExecutorNumStr);
@@ -222,15 +240,15 @@ public class CommonConfig {
             final long minSmallFile = 5 * 1024 * 1024; // 最小5MB
             final long maxSmallFile = 5 * 1024 * 1024 * 1024; // 最大5GB
             if (number < minSmallFile && number > maxSmallFile) {
-                throw new IllegalArgumentException(String.format(
-                        "legal smallFileThreshold is [%d, %d], 5MB ~ 5GB", minSmallFile, maxSmallFile));
+                throw new IllegalArgumentException(
+                        String.format("legal smallFileThreshold is [%d, %d], 5MB ~ 5GB", minSmallFile, maxSmallFile));
             }
             this.smallFileThreshold = number;
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("invalid smallFileThreshold");
         }
     }
-    
+
     public long getSmallFileThreshold() {
         return smallFileThreshold;
     }
@@ -245,22 +263,20 @@ public class CommonConfig {
         } else if (entireFileMd5AttachedStr.equalsIgnoreCase("off")) {
             this.entireFileMd5Attached = false;
         } else {
-            throw new IllegalArgumentException(
-                    "invalid entireFileMd5Attached config. only support on/off");
+            throw new IllegalArgumentException("invalid entireFileMd5Attached config. only support on/off");
         }
     }
-    
+
     public void setDaemonMode(String daemonModeStr) {
         if (daemonModeStr.equalsIgnoreCase("on")) {
             this.damonMode = true;
         } else if (daemonModeStr.equalsIgnoreCase("off")) {
             this.damonMode = false;
         } else {
-            throw new IllegalArgumentException(
-                    "invalid daemonMode config. only support on/off");
+            throw new IllegalArgumentException("invalid daemonMode config. only support on/off");
         }
     }
-    
+
     public void setDaemonModeInterVal(String daemonModeStr) {
         daemonModeStr = daemonModeStr.trim();
         try {
@@ -281,7 +297,7 @@ public class CommonConfig {
     public long getDamonInterVal() {
         return damonInterVal;
     }
-    
+
     public void setTimeWindowsStr(String timeWindowStr) {
         timeWindowStr = timeWindowStr.trim();
         String[] timeWindowArray = timeWindowStr.split(",");
@@ -302,7 +318,7 @@ public class CommonConfig {
                 throw new IllegalArgumentException("executeTimeWindow is invalid, the legal example 03:30,21:00");
             }
             this.timeWindowBegin = hour * 60 + minute;
-            
+
             String[] timeEndMemberArray = timeWindowArray[1].split(":");
             if (timeEndMemberArray.length != 2) {
                 throw new IllegalArgumentException("executeTimeWindow is invalid, the legal example 03:30,21:00");
@@ -316,7 +332,7 @@ public class CommonConfig {
                 throw new IllegalArgumentException("executeTimeWindow is invalid, the legal example 03:30,21:00");
             }
             this.timeWindowEnd = hour * 60 + minute;
-            
+
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("invalid executeTimeWindow");
         }
@@ -329,19 +345,19 @@ public class CommonConfig {
     public int getTimeWindowEnd() {
         return timeWindowEnd;
     }
-    
+
     public void setProxyHost(String host) {
         this.cosProxyHost = host;
     }
-    
+
     public void setProxyPort(int port) {
         this.cosProxyPort = port;
     }
-    
+
     public String getProxyHost() {
         return this.cosProxyHost;
     }
-    
+
     public int getProxyPort() {
         return this.cosProxyPort;
     }
