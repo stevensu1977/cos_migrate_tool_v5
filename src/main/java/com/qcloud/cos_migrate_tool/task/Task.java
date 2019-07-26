@@ -37,8 +37,6 @@ public abstract class Task implements Runnable {
     protected CommonConfig config;
     QUERY_RESULT query_result;
 
-
-
     public Task(Semaphore semaphore, CommonConfig config, TransferManager smallFileTransfer,
             TransferManager bigFileTransfer, RecordDb recordDb) {
         super();
@@ -55,8 +53,7 @@ public abstract class Task implements Runnable {
         if (query_result == RecordDb.QUERY_RESULT.ALL_EQ) {
             String printMsg = String.format("[skip] task_info: %s", recordElement.buildKey());
             System.out.println(printMsg);
-            log.info("skip! task_info: [key: {}], [value: {}]", recordElement.buildKey(),
-                    recordElement.buildValue());
+            log.info("skip! task_info: [key: {}], [value: {}]", recordElement.buildKey(), recordElement.buildValue());
             return true;
         }
 
@@ -79,14 +76,14 @@ public abstract class Task implements Runnable {
             pct = progress.getPercentTransferred();
         }
         String printMsg = String.format(
-                "[UploadInProgress] [key: %s] [byteSent/ byteTotal/ percentage: %d/ %d/ %.2f%%]",
-                key, byteSent, byteTotal, pct);
+                "[UploadInProgress] [key: %s] [byteSent/ byteTotal/ percentage: %d/ %d/ %.2f%%]", key, byteSent,
+                byteTotal, pct);
         log.info(printMsg);
         System.out.println(printMsg);
     }
 
-    public String showTransferProgressAndGetRequestId(Upload upload, boolean multipart, String key,
-            long mtime) throws InterruptedException {
+    public String showTransferProgressAndGetRequestId(Upload upload, boolean multipart, String key, long mtime)
+            throws InterruptedException {
         boolean pointSaveFlag = false;
         long printCount = 0;
         TransferProgress progress = upload.getProgress();
@@ -106,9 +103,8 @@ public abstract class Task implements Runnable {
                     multipartUploadId = persistableUploadInfo.getMultipartUploadId();
                     if (multipartUploadId != null) {
                         pointSaveFlag = this.recordDb.updateMultipartUploadSavePoint(
-                                persistableUploadInfo.getBucketName(),
-                                persistableUploadInfo.getKey(), persistableUploadInfo.getFile(),
-                                mtime, persistableUploadInfo.getPartSize(),
+                                persistableUploadInfo.getBucketName(), persistableUploadInfo.getKey(),
+                                persistableUploadInfo.getFile(), mtime, persistableUploadInfo.getPartSize(),
                                 persistableUploadInfo.getMutlipartUploadThreshold(),
                                 persistableUploadInfo.getMultipartUploadId());
                         if (pointSaveFlag) {
@@ -133,8 +129,7 @@ public abstract class Task implements Runnable {
                 if (multipartUploadId != null) {
                     boolean deleteFlag = this.recordDb.deleteMultipartUploadSavePoint(
                             persistableUploadInfo.getBucketName(), persistableUploadInfo.getKey(),
-                            persistableUploadInfo.getFile(), mtime,
-                            persistableUploadInfo.getPartSize(),
+                            persistableUploadInfo.getFile(), mtime, persistableUploadInfo.getPartSize(),
                             persistableUploadInfo.getMutlipartUploadThreshold());
                     if (deleteFlag) {
                         log.info("delete point success for multipart upload, key: {}", key);
@@ -160,40 +155,112 @@ public abstract class Task implements Runnable {
     }
 
     private String uploadBigFile(PutObjectRequest putObjectRequest) throws InterruptedException {
+        
+        //if cloudVendor is tencent
+        if (this.config.getCloudVendor().equalsIgnoreCase("tencent")) {
+        
         String bucketName = putObjectRequest.getBucketName();
         String cosKey = putObjectRequest.getKey();
         String localPath = putObjectRequest.getFile().getAbsolutePath();
         long mtime = putObjectRequest.getFile().lastModified();
-        long partSize = this.bigFileTransfer.getConfiguration().getMinimumUploadPartSize();
+        long partSize =
+        this.bigFileTransfer.getConfiguration().getMinimumUploadPartSize();
         long mutlipartUploadThreshold =
-                this.bigFileTransfer.getConfiguration().getMultipartUploadThreshold();
+        this.bigFileTransfer.getConfiguration().getMultipartUploadThreshold();
 
-        String multipartId = this.recordDb.queryMultipartUploadSavePoint(bucketName, cosKey,
-                localPath, mtime, partSize, mutlipartUploadThreshold);
+        String multipartId = this.recordDb.queryMultipartUploadSavePoint(bucketName,
+        cosKey,
+        localPath, mtime, partSize, mutlipartUploadThreshold);
         Upload upload = null;
         // 如果multipartId不为Null, 则表示存在断点, 使用续传.
-        if (multipartId != null && isMultipartUploadIdValid(bucketName, cosKey, multipartId)) {
-            PersistableUpload persistableUpload = new PersistableUpload(bucketName, cosKey,
-                    localPath, multipartId, partSize, mutlipartUploadThreshold);
-            upload = this.bigFileTransfer.resumeUpload(persistableUpload);
+        if (multipartId != null && isMultipartUploadIdValid(bucketName, cosKey,
+        multipartId)) {
+        PersistableUpload persistableUpload = new PersistableUpload(bucketName,
+        cosKey,
+        localPath, multipartId, partSize, mutlipartUploadThreshold);
+        upload = this.bigFileTransfer.resumeUpload(persistableUpload);
         } else {
-            upload = this.bigFileTransfer.upload(putObjectRequest);
+        upload = this.bigFileTransfer.upload(putObjectRequest);
         }
         return showTransferProgressAndGetRequestId(upload, true, cosKey, mtime);
+        
+        }
+        
+        //if cloudVendor is aws
+        if (this.config.getCloudVendor().equalsIgnoreCase("AWS")) {
+        
+        String keyName = putObjectRequest.getKey();
+        if (keyName.startsWith("/")) {
+            keyName = keyName.substring(1);
+
+        }
+
+        
+
+        File f = new File(putObjectRequest.getFile().getAbsolutePath());
+      
+        try {
+            com.amazonaws.services.s3.transfer.TransferManager xfer_mgr=  AWSS3Client.buildTransferManager(this.config);
+            com.amazonaws.services.s3.transfer.Upload xfer = xfer_mgr.upload(putObjectRequest.getBucketName(), keyName,
+                    f);
+            XferMgrProgress.showTransferProgress(xfer);
+            XferMgrProgress.waitForCompletion(xfer);
+
+        } catch (com.amazonaws.AmazonServiceException e) {
+            System.err.println(e.getErrorMessage());
+            System.exit(1);
+        }
+        return putObjectRequest.getBucketName() + "/" + keyName;
+        }
+        
+        return "No task";
     }
-
-
 
     private String uploadSmallFile(PutObjectRequest putObjectRequest) throws InterruptedException {
-        Upload upload = smallFileTransfer.upload(putObjectRequest);
-        return showTransferProgressAndGetRequestId(upload, false, putObjectRequest.getKey(),
-                putObjectRequest.getFile().lastModified());
+
+        //if cloudVendor is tencent
+        if (this.config.getCloudVendor().equalsIgnoreCase("tencent")) {
+            Upload upload = smallFileTransfer.upload(putObjectRequest);
+            return showTransferProgressAndGetRequestId(upload, false, putObjectRequest.getKey(),
+                    putObjectRequest.getFile().lastModified());
+        }
+
+        //if cloudVendor is aws
+        if (this.config.getCloudVendor().equalsIgnoreCase("AWS")) {
+            
+            log.debug("invoke uploadSmallFile");
+            log.debug(putObjectRequest.getFile().getAbsolutePath());
+
+            String keyName = putObjectRequest.getKey();
+            if (keyName.startsWith("/")) {
+                keyName = keyName.substring(1);
+
+            }
+
+            log.debug(putObjectRequest.getKey());
+            log.debug(keyName);
+
+            File f = new File(putObjectRequest.getFile().getAbsolutePath());
+            try {
+                com.amazonaws.services.s3.transfer.TransferManager xfer_mgr=  AWSS3Client.buildTransferManager(this.config);
+                com.amazonaws.services.s3.transfer.Upload xfer = xfer_mgr.upload(putObjectRequest.getBucketName(),
+                        keyName, f);
+                XferMgrProgress.showTransferProgress(xfer);
+                XferMgrProgress.waitForCompletion(xfer);
+            } catch (com.amazonaws.AmazonServiceException e) {
+                System.err.println(e.getErrorMessage());
+                System.exit(1);
+            }
+
+            return "Completed";
+        }
+
+        return "No task";
+
     }
 
-
-    public String uploadFile(String bucketName, String cosPath, File localFile,
-            StorageClass storageClass, boolean entireMd5Attached, ObjectMetadata objectMetadata)
-            throws Exception {
+    public String uploadFile(String bucketName, String cosPath, File localFile, StorageClass storageClass,
+            boolean entireMd5Attached, ObjectMetadata objectMetadata) throws Exception {
         PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName, cosPath, localFile);
         putObjectRequest.setStorageClass(storageClass);
 
@@ -205,7 +272,7 @@ public abstract class Task implements Runnable {
         if (config.getEncryptionType().equals("sse-cos")) {
             objectMetadata.setServerSideEncryption("AES256");
         }
-        
+
         putObjectRequest.setMetadata(objectMetadata);
         int retryTime = 0;
         final int maxRetry = 5;
@@ -243,13 +310,11 @@ public abstract class Task implements Runnable {
             }
 
             if (mutex.tryAcquire()) {
-                String printTips = String.format(
-                        "currentTime %s, wait next time window [%02d:%02d, %02d:%02d]",
-                        dateTime.toString("yyyy-MM-dd HH:mm:ss"), timeWindowBegin / 60,
-                        timeWindowBegin % 60, timeWindowEnd / 60, timeWindowEnd % 60);
+                String printTips = String.format("currentTime %s, wait next time window [%02d:%02d, %02d:%02d]",
+                        dateTime.toString("yyyy-MM-dd HH:mm:ss"), timeWindowBegin / 60, timeWindowBegin % 60,
+                        timeWindowEnd / 60, timeWindowEnd % 60);
                 System.out.println(printTips);
-                System.out.println(
-                        "---------------------------------------------------------------------");
+                System.out.println("---------------------------------------------------------------------");
                 log.info(printTips);
                 Thread.sleep(60000);
                 mutex.release();
