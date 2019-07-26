@@ -3,18 +3,28 @@
 本工具是fork https://github.com/tencentyun/cos_migrate_tool_v5.git
 
 使用前请修改conf/config.ini 以下内容
-[common]
-cloudVendor=aws
-secretId=AKI**********
-secretKey=***********
-region=cn-northwest-1
 
-以及对应的
-migrateXXX里面的key
-[migrateAli]
-bucket=stevensu-bucket
-accessKeyId=**********
-accessKeySecret=**********
+ ```
+  [common]
+  cloudVendor=aws
+  secretId=AKI**********
+  secretKey=***********
+  region=cn-northwest-1
+
+  #以及对应的
+  #migrateXXX里面的key
+  [migrateAli]
+  bucket=stevensu-bucket
+  accessKeyId=**********
+  accessKeySecret=**********
+  
+ ```
+
+ 然后执行start_migrate.sh
+ 
+  
+  
+  
 
 
 
