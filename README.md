@@ -1,6 +1,28 @@
-# 迁移工具
+#AWS S3, Tencent COS 迁移工具
+
+本工具是fork https://github.com/tencentyun/cos_migrate_tool_v5.git
+
+使用前请修改conf/config.ini 以下内容
+[common]
+cloudVendor=aws
+secretId=AKI**********
+secretKey=***********
+region=cn-northwest-1
+
+以及对应的
+migrateXXX里面的key
+[migrateAli]
+bucket=stevensu-bucket
+accessKeyId=**********
+accessKeySecret=**********
+
+
 
 ## 功能说明
+
+增加功能点:
+  增加AWS S3的同步
+  
 
 迁移工具集成了有关COS数据迁移的功能, 目前支持以下四大类迁移
 - 本地数据迁移到COS, 功能同之前的本地同步工具
