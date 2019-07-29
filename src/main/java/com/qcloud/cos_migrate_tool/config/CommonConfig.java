@@ -93,10 +93,12 @@ public class CommonConfig {
 
     public void setBucketName(String bucketName) {
         bucketName = bucketName.trim();
+        if (this.cloudVendor.equalsIgnoreCase("TENCENT")){
         String parrtern = ".*-(125|100|20)[0-9]{3,}$";
         if (!Pattern.matches(parrtern, bucketName)) {
             throw new IllegalArgumentException("bucketName must contain appid. example: test-1250001000");
         }
+       }
         this.bucketName = bucketName;
     }
 
