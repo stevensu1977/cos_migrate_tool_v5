@@ -1,6 +1,7 @@
 package com.qcloud.cos_migrate_tool.task;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -155,79 +156,90 @@ public abstract class Task implements Runnable {
     }
 
     private String uploadBigFile(PutObjectRequest putObjectRequest) throws InterruptedException {
-        
-        //if cloudVendor is tencent
+
+        // if cloudVendor is tencent
         if (this.config.getCloudVendor().equalsIgnoreCase("tencent")) {
-        
-        String bucketName = putObjectRequest.getBucketName();
-        String cosKey = putObjectRequest.getKey();
-        String localPath = putObjectRequest.getFile().getAbsolutePath();
-        long mtime = putObjectRequest.getFile().lastModified();
-        long partSize =
-        this.bigFileTransfer.getConfiguration().getMinimumUploadPartSize();
-        long mutlipartUploadThreshold =
-        this.bigFileTransfer.getConfiguration().getMultipartUploadThreshold();
 
-        String multipartId = this.recordDb.queryMultipartUploadSavePoint(bucketName,
-        cosKey,
-        localPath, mtime, partSize, mutlipartUploadThreshold);
-        Upload upload = null;
-        // 如果multipartId不为Null, 则表示存在断点, 使用续传.
-        if (multipartId != null && isMultipartUploadIdValid(bucketName, cosKey,
-        multipartId)) {
-        PersistableUpload persistableUpload = new PersistableUpload(bucketName,
-        cosKey,
-        localPath, multipartId, partSize, mutlipartUploadThreshold);
-        upload = this.bigFileTransfer.resumeUpload(persistableUpload);
-        } else {
-        upload = this.bigFileTransfer.upload(putObjectRequest);
+            String bucketName = putObjectRequest.getBucketName();
+            String cosKey = putObjectRequest.getKey();
+            String localPath = putObjectRequest.getFile().getAbsolutePath();
+            long mtime = putObjectRequest.getFile().lastModified();
+            long partSize = this.bigFileTransfer.getConfiguration().getMinimumUploadPartSize();
+            long mutlipartUploadThreshold = this.bigFileTransfer.getConfiguration().getMultipartUploadThreshold();
+
+            String multipartId = this.recordDb.queryMultipartUploadSavePoint(bucketName, cosKey, localPath, mtime,
+                    partSize, mutlipartUploadThreshold);
+            Upload upload = null;
+            // 如果multipartId不为Null, 则表示存在断点, 使用续传.
+            if (multipartId != null && isMultipartUploadIdValid(bucketName, cosKey, multipartId)) {
+                PersistableUpload persistableUpload = new PersistableUpload(bucketName, cosKey, localPath, multipartId,
+                        partSize, mutlipartUploadThreshold);
+                upload = this.bigFileTransfer.resumeUpload(persistableUpload);
+            } else {
+                upload = this.bigFileTransfer.upload(putObjectRequest);
+            }
+            return showTransferProgressAndGetRequestId(upload, true, cosKey, mtime);
+
         }
-        return showTransferProgressAndGetRequestId(upload, true, cosKey, mtime);
-        
-        }
-        
-        //if cloudVendor is aws
+
+        // if cloudVendor is aws
         if (this.config.getCloudVendor().equalsIgnoreCase("AWS")) {
-        
-        String keyName = putObjectRequest.getKey();
-        if (keyName.startsWith("/")) {
-            keyName = keyName.substring(1);
 
+            String keyName = putObjectRequest.getKey();
+            if (keyName.startsWith("/")) {
+                keyName = keyName.substring(1);
+
+            }
+
+            try {
+                File f = new File(putObjectRequest.getFile().getAbsolutePath());
+                FileInputStream fin = new FileInputStream(f);
+                com.amazonaws.services.s3.model.ObjectMetadata meta = new com.amazonaws.services.s3.model.ObjectMetadata();
+
+                meta.setContentType(putObjectRequest.getMetadata().getContentType());
+                meta.setContentLength(putObjectRequest.getMetadata().getContentLength());
+                meta.setContentMD5(putObjectRequest.getMetadata().getContentMD5());
+
+                com.amazonaws.services.s3.transfer.TransferManager xfer_mgr = AWSS3Client
+                        .buildTransferManager(this.config);
+                // com.amazonaws.services.s3.transfer.Upload xfer =
+                // xfer_mgr.upload(putObjectRequest.getBucketName(), keyName,
+                // f);
+                com.amazonaws.services.s3.transfer.Upload xfer = xfer_mgr.upload(putObjectRequest.getBucketName(),
+                        keyName, fin, meta);
+
+                XferMgrProgress.showTransferProgress(xfer);
+                XferMgrProgress.waitForCompletion(xfer);
+
+            } catch (com.amazonaws.AmazonServiceException e) {
+                System.err.println(e.getErrorMessage());
+                System.exit(1);
+
+            } catch (com.amazonaws.AmazonClientException e) {
+                System.err.println(e.getMessage());
+                System.exit(1);
+            } catch (java.io.FileNotFoundException e) {
+                System.err.println(e.getMessage());
+                System.exit(1);
+            }
+            return putObjectRequest.getBucketName() + "/" + keyName;
         }
 
-        
-
-        File f = new File(putObjectRequest.getFile().getAbsolutePath());
-      
-        try {
-            com.amazonaws.services.s3.transfer.TransferManager xfer_mgr=  AWSS3Client.buildTransferManager(this.config);
-            com.amazonaws.services.s3.transfer.Upload xfer = xfer_mgr.upload(putObjectRequest.getBucketName(), keyName,
-                    f);
-            XferMgrProgress.showTransferProgress(xfer);
-            XferMgrProgress.waitForCompletion(xfer);
-
-        } catch (com.amazonaws.AmazonServiceException e) {
-            System.err.println(e.getErrorMessage());
-            System.exit(1);
-        }
-        return putObjectRequest.getBucketName() + "/" + keyName;
-        }
-        
         return "No task";
     }
 
     private String uploadSmallFile(PutObjectRequest putObjectRequest) throws InterruptedException {
 
-        //if cloudVendor is tencent
+        // if cloudVendor is tencent
         if (this.config.getCloudVendor().equalsIgnoreCase("tencent")) {
             Upload upload = smallFileTransfer.upload(putObjectRequest);
             return showTransferProgressAndGetRequestId(upload, false, putObjectRequest.getKey(),
                     putObjectRequest.getFile().lastModified());
         }
 
-        //if cloudVendor is aws
+        // if cloudVendor is aws
         if (this.config.getCloudVendor().equalsIgnoreCase("AWS")) {
-            
+
             log.debug("invoke uploadSmallFile");
             log.debug(putObjectRequest.getFile().getAbsolutePath());
 
@@ -240,15 +252,33 @@ public abstract class Task implements Runnable {
             log.debug(putObjectRequest.getKey());
             log.debug(keyName);
 
-            File f = new File(putObjectRequest.getFile().getAbsolutePath());
             try {
-                com.amazonaws.services.s3.transfer.TransferManager xfer_mgr=  AWSS3Client.buildTransferManager(this.config);
+
+                File f = new File(putObjectRequest.getFile().getAbsolutePath());
+                FileInputStream fin = new FileInputStream(f);
+                com.amazonaws.services.s3.model.ObjectMetadata meta = new com.amazonaws.services.s3.model.ObjectMetadata();
+
+                meta.setContentType(putObjectRequest.getMetadata().getContentType());
+                meta.setContentLength(putObjectRequest.getMetadata().getContentLength());
+                meta.setContentMD5(putObjectRequest.getMetadata().getContentMD5());
+
+                com.amazonaws.services.s3.transfer.TransferManager xfer_mgr = AWSS3Client
+                        .buildTransferManager(this.config);
+                // com.amazonaws.services.s3.transfer.Upload xfer =
+                // xfer_mgr.upload(putObjectRequest.getBucketName(),
+                // keyName, f);
                 com.amazonaws.services.s3.transfer.Upload xfer = xfer_mgr.upload(putObjectRequest.getBucketName(),
-                        keyName, f);
+                        keyName, fin, meta);
                 XferMgrProgress.showTransferProgress(xfer);
                 XferMgrProgress.waitForCompletion(xfer);
             } catch (com.amazonaws.AmazonServiceException e) {
                 System.err.println(e.getErrorMessage());
+                System.exit(1);
+            } catch (com.amazonaws.AmazonClientException e) {
+                System.err.println(e.getMessage());
+                System.exit(1);
+            } catch (java.io.FileNotFoundException e) {
+                System.err.println(e.getMessage());
                 System.exit(1);
             }
 
@@ -281,8 +311,10 @@ public abstract class Task implements Runnable {
             try {
                 if (localFile.length() >= smallFileThreshold) {
                     return uploadBigFile(putObjectRequest);
+
                 } else {
                     return uploadSmallFile(putObjectRequest);
+
                 }
             } catch (Exception e) {
                 log.warn("upload failed, ready to retry. retryTime:" + retryTime, e);
